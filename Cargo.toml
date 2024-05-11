@@ -1,6 +1,6 @@
 [package]
 name = "content-addressable"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Content addressable storage traits and implementations"
@@ -14,7 +14,7 @@ dag_cbor = ["serde_cbor", "serde_cbor/tags", "multicid/dag_cbor" ]
 
 [dependencies]
 log = "0.4.21"
-multibase = "0.9"
+multibase = { version = "1.0", git = "https://github.com/cryptidtech/rust-multibase.git" }
 multicid = { version = "1.0", git = "https://github.com/cryptidtech/multicid.git" }
 multicodec = { version = "1.0", git = "https://github.com/cryptidtech/rust-multicodec.git" }
 multihash = { versin = "1.0", git = "https://github.com/cryptidtech/multihash.git" }
