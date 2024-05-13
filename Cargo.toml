@@ -17,7 +17,7 @@ log = "0.4.21"
 multibase = { version = "1.0", git = "https://github.com/cryptidtech/rust-multibase.git" }
 multicid = { version = "1.0", git = "https://github.com/cryptidtech/multicid.git" }
 multicodec = { version = "1.0", git = "https://github.com/cryptidtech/rust-multicodec.git" }
-multihash = { versin = "1.0", git = "https://github.com/cryptidtech/multihash.git" }
+multihash = { version = "1.0", git = "https://github.com/cryptidtech/multihash.git" }
 multitrait = { version = "1.0", git = "https://github.com/cryptidtech/multitrait.git" }
 multiutil = { version = "1.0", git = "https://github.com/cryptidtech/multiutil.git" }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
