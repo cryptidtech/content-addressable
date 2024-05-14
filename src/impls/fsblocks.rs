@@ -145,6 +145,7 @@ pub struct Builder {
 impl Builder {
     /// create a new builder from the root path, this defaults to lazy
     pub fn new(root: &Path) -> Self {
+        debug!("fsblocks::Builder::new({})", root.display());
         Builder {
             root: root.to_path_buf(),
             lazy: true,
@@ -171,9 +172,10 @@ impl Builder {
         // create the root directory
         let root = self.root.clone();
         if !root.exists() {
-            debug!("creating fsblocks root dir at {}", root.display());
+            debug!("fsblocks: creating root dir at {}", root.display());
             fs::create_dir_all(&root)?;
         }
+        debug!("fsblocks: root dir exists");
 
         if !self.lazy {
             // construct the directory structure using the alphabent of the base encoder
@@ -187,6 +189,8 @@ impl Builder {
                 }
             }
         }
+        debug!("fsblocsk: symbol dirs exists (might be lazy created)");
+
         Ok(FsBlocks {
             root: root.clone(),
             lazy: self.lazy,
