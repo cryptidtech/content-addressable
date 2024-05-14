@@ -170,7 +170,10 @@ impl Builder {
 
         // create the root directory
         let root = self.root.clone();
-        fs::create_dir_all(&root)?;
+        if !root.exists() {
+            debug!("creating fsblocks root dir at {}", root.display());
+            fs::create_dir_all(&root)?;
+        }
 
         if !self.lazy {
             // construct the directory structure using the alphabent of the base encoder
@@ -178,8 +181,10 @@ impl Builder {
             for c in symbols.chars() {
                 let mut p = root.clone();
                 p.push(c.to_string());
-                debug!("fsblocks: creating {}", p.display());
-                fs::create_dir_all(&p)?;
+                if !p.exists() {
+                    debug!("fsblocks: creating {}", p.display());
+                    fs::create_dir_all(&p)?;
+                }
             }
         }
         Ok(FsBlocks {
