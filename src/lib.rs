@@ -15,7 +15,7 @@ pub use error::Error;
 
 /// Implementations of the traits
 pub mod impls;
-pub use impls::fsblocks::FsBlocks;
+pub use impls::fsblocks::{self, FsBlocks};
 
 /// Traits from this crate
 pub mod traits;
