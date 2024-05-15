@@ -109,8 +109,8 @@ impl Blocks for FsBlocks {
         Ok(cid)
     }
 
-    fn encoding(&self) -> Result<multibase::Base> {
-        self.base_encoding
+    fn encoding(&self) -> Result<Base, Self::Error> {
+        Ok(self.base_encoding)
     }
 }
 
