@@ -15,4 +15,7 @@ pub trait Blocks {
     where
         D: AsRef<[u8]>,
         F: Fn(&D) -> Result<Cid, Self::Error>;
+
+    /// Return the base encoding used for CIDs if the imple is encoding CIDs
+    fn encoding(&self) -> Result<multibase::Base>;
 }

@@ -108,6 +108,10 @@ impl Blocks for FsBlocks {
         f.write_all(data.as_ref())?;
         Ok(cid)
     }
+
+    fn encoding(&self) -> Result<multibase::Base> {
+        self.base_encoding
+    }
 }
 
 fn encoding_symbols(base: &Base) -> Result<String, Error> {
