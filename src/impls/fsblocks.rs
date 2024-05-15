@@ -47,8 +47,10 @@ impl Blocks for FsBlocks {
         // get the base encoded CID
         let ecid = BaseEncoded::new(self.base_encoding, cid.clone());
 
-        // get the last char of the encoded CID
-        let c = ecid.to_string().chars().last().ok_or(FsBlocksError::InvalidCid(ecid.clone()))?;
+        // get the middle char of the encoded CID
+        let s = ecid.to_string();
+        let l = s.len();
+        let c = s.chars().nth_back(l >> 1).ok_or(FsBlocksError::InvalidCid(ecid.clone()))?;
 
         // create a pathbuf to the subfolder
         let mut pb = self.root.clone();
@@ -84,8 +86,10 @@ impl Blocks for FsBlocks {
         // get the base encoded CID
         let ecid = BaseEncoded::new(self.base_encoding, cid.clone());
 
-        // get the first char of the encoded CID
-        let c = ecid.to_string().chars().last().ok_or(FsBlocksError::InvalidCid(ecid.clone()))?;
+        // get the middle char of the encoded CID
+        let s = ecid.to_string();
+        let l = s.len();
+        let c = s.chars().nth_back(l >> 1).ok_or(FsBlocksError::InvalidCid(ecid.clone()))?;
 
         // create a pathbuf to the subfolder
         let mut pb = self.root.clone();
