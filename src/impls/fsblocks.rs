@@ -3,7 +3,7 @@ use crate::{Blocks, Error, error::FsBlocksError};
 use log::debug;
 use multibase::Base;
 use multicid::{Cid, EncodedCid};
-use multiutil::BaseEncoded;
+use multiutil::{BaseEncoded, EncodingInfo};
 use serde::{Deserialize, Serialize};
 use std::{fs::{self, File}, io::{Read, Write}, path::{Path, PathBuf}};
 
@@ -19,7 +19,82 @@ pub struct FsBlocks {
     pub base_encoding: Base,
 }
 
+impl EncodingInfo for FsBlocks {
+    fn preferred_encoding() -> Base {
+        Base::Base32Z
+    }
+
+    fn encoding(&self) -> Base {
+        self.base_encoding
+    }
+}
+
 impl FsBlocks {
+    /// garbage collect the block storage to remove any lazy deleted files and empty subfolders
+    pub fn gc(&mut self) -> Result<(), Error> {
+        for subfolder in &Self::subfolders(Some(self.encoding()), &self.root)? {
+            if !subfolder.try_exists()? {
+                continue;
+            }
+            for file in fs::read_dir(subfolder)? {
+                let file = file?;
+                if file.file_name().to_string_lossy().starts_with(".") {
+                    fs::remove_file(&file.path())?;
+                    debug!("fsblocks: GC'd file {}", file.path().display());
+                }
+            }
+            if fs::read_dir(subfolder)?.count() == 0 {
+                fs::remove_dir(subfolder)?;
+                debug!("fsblocks: GC'd subfolder {}", subfolder.display());
+            }
+        }
+        Ok(())
+    }
+
+    /// get an iterator over the subfolders given the base encoding
+    pub fn subfolders<P: AsRef<Path>>(base_encoding: Option<Base>, root: P) -> Result<Vec<PathBuf>, Error> {
+        let base_encoding = base_encoding.unwrap_or(FsBlocks::preferred_encoding());
+
+        // create the root directory
+        if !root.as_ref().try_exists()? {
+            debug!("fsblocks: creating root dir at {}", root.as_ref().display());
+            fs::create_dir_all(&root)?;
+        }
+        debug!("fsblocks: root dir exists");
+
+        // construct the directory structure using the alphabent of the base encoder
+        let symbols = Self::encoding_symbols(&base_encoding)?;
+        Ok(symbols.chars().map(|c| {
+            let mut p = root.as_ref().to_path_buf();
+            p.push(c.to_string());
+            p
+        }).collect())
+    }
+
+    fn encoding_symbols(base: &Base) -> Result<String, Error> {
+        match base {
+            Base::Base2 => Ok("01".into()),
+            Base::Base8 => Ok("01234567".into()),
+            Base::Base10 => Ok("0123456789".into()),
+            Base::Base16Lower => Ok("0123456789abcdef".into()),
+            Base::Base16Upper => Ok("0123456789ABCDEF".into()),
+            Base::Base32Lower | Base::Base32PadLower => Ok("abcdefghijklmnopqrstuvwxyz234567".into()),
+            Base::Base32Upper | Base::Base32PadUpper => Ok("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".into()),
+            Base::Base32HexLower | Base::Base32HexPadLower => Ok("0123456789abcdefghijklmnopqrstuv".into()),
+            Base::Base32HexUpper | Base::Base32HexPadUpper => Ok("0123456789ABCDEFGHIJKLMNOPQRSTUV".into()),
+            Base::Base32Z => Ok("ybndrfg8ejkmcpqxot1uwisza345h769".into()),
+            Base::Base36Lower => Ok("0123456789abcdefghijklmnopqrstuvwxyz".into()),
+            Base::Base36Upper => Ok("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".into()),
+            Base::Base58Flickr => Ok("123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ".into()),
+            Base::Base58Btc => Ok("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".into()),
+            Base::Base64 |
+            Base::Base64Pad |
+            Base::Base64Url |
+            Base::Base64UrlPad => Ok("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".into()),
+            _ => Err(FsBlocksError::UnsupportedBaseEncoding(base.clone()).into())
+        }
+    }
+
     pub(crate) fn get_paths(&self, cid: &Cid) -> Result<(EncodedCid, PathBuf, PathBuf, PathBuf), Error> {
         let ecid = self.encode_cid(cid)?;
         let subfolder = self.get_subfolder(&ecid)?;
@@ -45,14 +120,14 @@ impl FsBlocks {
         Ok(pb)
     }
 
-    fn get_file(&self, subfolder: &Path, ecid: &EncodedCid) -> Result<PathBuf, Error> {
-        let mut pb = subfolder.to_path_buf();
+    fn get_file<P: AsRef<Path>>(&self, subfolder: P, ecid: &EncodedCid) -> Result<PathBuf, Error> {
+        let mut pb = subfolder.as_ref().to_path_buf();
         pb.push(&ecid.to_string());
         Ok(pb)
     }
 
-    fn get_lazy_deleted_file(&self, subfolder: &Path, ecid: &EncodedCid) -> Result<PathBuf, Error> {
-        let mut pb = subfolder.to_path_buf();
+    fn get_lazy_deleted_file<P: AsRef<Path>>(&self, subfolder: P, ecid: &EncodedCid) -> Result<PathBuf, Error> {
+        let mut pb = subfolder.as_ref().to_path_buf();
         pb.push(&format!(".{}", ecid.to_string()));
         Ok(pb)
     }
@@ -96,7 +171,7 @@ impl Blocks for FsBlocks {
         }
 
         // store the block in the filesystem
-        debug!("Getting block from: {}", file.display());
+        debug!("fsblocks: Getting block from: {}", file.display());
         let mut f = File::open(&file)?;
         let mut data = Vec::default();
         f.read_to_end(&mut data)?;
@@ -121,11 +196,11 @@ impl Blocks for FsBlocks {
             }
         } else {
             fs::create_dir_all(&subfolder)?;
-            debug!("Created subfolder at: {}", subfolder.display());
+            debug!("fsblocks: Created subfolder at: {}", subfolder.display());
         }
 
         // store the block in the filesystem
-        debug!("Storing block at: {}", file.display());
+        debug!("fsblocks: Storing block at: {}", file.display());
         let mut f = File::create(&file)?;
         f.write_all(data.as_ref())?;
         Ok(cid)
@@ -143,11 +218,11 @@ impl Blocks for FsBlocks {
             if self.lazy {
                 // rename the file instead of remove it
                 fs::rename(&file, &lazy_deleted_file)?;
-                debug!("Lazy deleted block at: {} to {}", file.display(), lazy_deleted_file.display());
+                debug!("fsblocks: Lazy deleted block at: {} to {}", file.display(), lazy_deleted_file.display());
             } else {
                 // not lazy so delete it
                 fs::remove_file(&file)?;
-                debug!("Removed block at: {}", file.display());
+                debug!("fsblocks: Removed block at: {}", file.display());
             }
         }
 
@@ -155,39 +230,11 @@ impl Blocks for FsBlocks {
         if subfolder.try_exists()? && subfolder.is_dir() {
             if fs::read_dir(&subfolder)?.count() == 0 && !self.lazy {
                 fs::remove_dir(&subfolder)?;
-                debug!("Removed subdir at: {}", subfolder.display());
+                debug!("fsblocks: Removed subdir at: {}", subfolder.display());
             }
         }
 
         Ok(v)
-    }
-
-    fn encoding(&self) -> Result<Base, Self::Error> {
-        Ok(self.base_encoding)
-    }
-}
-
-fn encoding_symbols(base: &Base) -> Result<String, Error> {
-    match base {
-        Base::Base2 => Ok("01".into()),
-        Base::Base8 => Ok("01234567".into()),
-        Base::Base10 => Ok("0123456789".into()),
-        Base::Base16Lower => Ok("0123456789abcdef".into()),
-        Base::Base16Upper => Ok("0123456789ABCDEF".into()),
-        Base::Base32Lower | Base::Base32PadLower => Ok("abcdefghijklmnopqrstuvwxyz234567".into()),
-        Base::Base32Upper | Base::Base32PadUpper => Ok("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".into()),
-        Base::Base32HexLower | Base::Base32HexPadLower => Ok("0123456789abcdefghijklmnopqrstuv".into()),
-        Base::Base32HexUpper | Base::Base32HexPadUpper => Ok("0123456789ABCDEFGHIJKLMNOPQRSTUV".into()),
-        Base::Base32Z => Ok("ybndrfg8ejkmcpqxot1uwisza345h769".into()),
-        Base::Base36Lower => Ok("0123456789abcdefghijklmnopqrstuvwxyz".into()),
-        Base::Base36Upper => Ok("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".into()),
-        Base::Base58Flickr => Ok("123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ".into()),
-        Base::Base58Btc => Ok("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".into()),
-        Base::Base64 |
-        Base::Base64Pad |
-        Base::Base64Url |
-        Base::Base64UrlPad => Ok("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".into()),
-        _ => Err(FsBlocksError::UnsupportedBaseEncoding(base.clone()).into())
     }
 }
 
@@ -224,33 +271,30 @@ impl Builder {
 
     /// build the instance
     pub fn try_build(&self) -> Result<FsBlocks, Error> {
-        let base_encoding = self.base_encoding.unwrap_or(Base::Base32Z);
+        let lazy = self.lazy;
+        let base_encoding = self.base_encoding.unwrap_or(FsBlocks::preferred_encoding());
 
         // create the root directory
         let root = self.root.clone();
-        if !root.exists() {
-            debug!("fsblocks: creating root dir at {}", root.display());
+        if !root.try_exists()? {
+            debug!("fsblocks: Creating root folder at {}", root.display());
             fs::create_dir_all(&root)?;
         }
-        debug!("fsblocks: root dir exists");
+        debug!("fsblocks: Root dir exists");
 
         if !self.lazy {
             // construct the directory structure using the alphabent of the base encoder
-            let symbols = encoding_symbols(&base_encoding)?;
-            for c in symbols.chars() {
-                let mut p = root.clone();
-                p.push(c.to_string());
-                if !p.exists() {
-                    debug!("fsblocks: creating {}", p.display());
-                    fs::create_dir_all(&p)?;
+            for subfolder in &FsBlocks::subfolders(self.base_encoding, &root)? {
+                if !subfolder.try_exists()? {
+                    debug!("fsblocks: Creating subfolder {}", subfolder.display());
+                    fs::create_dir_all(subfolder)?;
                 }
             }
         }
-        debug!("fsblocsk: symbol dirs exists (might be lazy created)");
 
         Ok(FsBlocks {
-            root: root.clone(),
-            lazy: self.lazy,
+            root,
+            lazy,
             base_encoding
         })
     }
@@ -392,6 +436,47 @@ mod tests {
         assert!(!file.try_exists().unwrap());
         // and since the subfolder is empty it should not be there either
         assert!(!subfolder.try_exists().unwrap());
+
+        assert!(fs::remove_dir_all(&pb).is_ok());
+    }
+
+    #[test]
+    fn test_gc() {
+        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        pb.push(".tmp7");
+
+        let mut blocks = Builder::new(&pb).try_build().unwrap();
+        
+        let v1 = b"for great justice!".to_vec();
+        let cid1 = put(&mut blocks, &v1);
+        let v2 = b"move every zig!".to_vec();
+        let cid2 = put(&mut blocks, &v2);
+
+        let _ = blocks.rm(&cid1).unwrap();
+        let _ = blocks.rm(&cid2).unwrap();
+
+        // lazy delete, check that the file is gone, the lazy delete file and folder still exist
+        let (_, subfolder1, file1, lazy_deleted_file1) = blocks.get_paths(&cid1).unwrap();
+        assert!(lazy_deleted_file1.try_exists().unwrap());
+        assert!(!file1.try_exists().unwrap());
+        assert!(subfolder1.try_exists().unwrap());
+
+        // lazy delete, check that the file is gone, the lazy delete file and folder still exist
+        let (_, subfolder2, file2, lazy_deleted_file2) = blocks.get_paths(&cid2).unwrap();
+        assert!(lazy_deleted_file2.try_exists().unwrap());
+        assert!(!file2.try_exists().unwrap());
+        assert!(subfolder2.try_exists().unwrap());
+
+        // garbage collect
+        blocks.gc().unwrap();
+
+        // no files nor folders should exist
+        assert!(!lazy_deleted_file1.try_exists().unwrap());
+        assert!(!file1.try_exists().unwrap());
+        assert!(!subfolder1.try_exists().unwrap());
+        assert!(!lazy_deleted_file2.try_exists().unwrap());
+        assert!(!file2.try_exists().unwrap());
+        assert!(!subfolder2.try_exists().unwrap());
 
         assert!(fs::remove_dir_all(&pb).is_ok());
     }

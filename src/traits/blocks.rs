@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-use multibase::Base;
 use multicid::Cid;
 
 /// Abstract block storage trait for getting and putting content addressed data
@@ -18,7 +17,4 @@ pub trait Blocks {
 
     /// Try to remove a block from storage
     fn rm(&self, cit: &Cid) -> Result<Vec<u8>, Self::Error>;
-
-    /// Return the base encoding used for CIDs if the imple is encoding CIDs
-    fn encoding(&self) -> Result<Base, Self::Error>;
 }
