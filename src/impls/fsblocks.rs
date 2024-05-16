@@ -248,10 +248,10 @@ pub struct Builder {
 
 impl Builder {
     /// create a new builder from the root path, this defaults to lazy
-    pub fn new(root: &Path) -> Self {
-        debug!("fsblocks::Builder::new({})", root.display());
+    pub fn new<P: AsRef<Path>>(root: P) -> Self {
+        debug!("fsblocks::Builder::new({})", root.as_ref().display());
         Builder {
-            root: root.to_path_buf(),
+            root: root.as_ref().to_path_buf(),
             lazy: true,
             base_encoding: None,
         }
