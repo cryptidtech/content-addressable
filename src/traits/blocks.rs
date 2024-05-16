@@ -16,6 +16,9 @@ pub trait Blocks {
         D: AsRef<[u8]>,
         F: Fn(&D) -> Result<Cid, Self::Error>;
 
+    /// Try to remove a block from storage
+    fn rm(&self, cit: &Cid) -> Result<Vec<u8>, Self::Error>;
+
     /// Return the base encoding used for CIDs if the imple is encoding CIDs
     fn encoding(&self) -> Result<Base, Self::Error>;
 }

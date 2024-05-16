@@ -2,7 +2,7 @@
 use crate::{Blocks, Error, error::FsBlocksError};
 use log::debug;
 use multibase::Base;
-use multicid::Cid;
+use multicid::{Cid, EncodedCid};
 use multiutil::BaseEncoded;
 use serde::{Deserialize, Serialize};
 use std::{fs::{self, File}, io::{Read, Write}, path::{Path, PathBuf}};
@@ -17,6 +17,45 @@ pub struct FsBlocks {
     /// The base encoding for new CIDs
     #[serde(with = "serde_base")]
     pub base_encoding: Base,
+}
+
+impl FsBlocks {
+    pub(crate) fn get_paths(&self, cid: &Cid) -> Result<(EncodedCid, PathBuf, PathBuf, PathBuf), Error> {
+        let ecid = self.encode_cid(cid)?;
+        let subfolder = self.get_subfolder(&ecid)?;
+        let file = self.get_file(&subfolder, &ecid)?;
+        let lazy_deleted_file = self.get_lazy_deleted_file(&subfolder, &ecid)?;
+        Ok((ecid, subfolder, file, lazy_deleted_file))
+    }
+
+    fn encode_cid(&self, cid: &Cid) -> Result<EncodedCid, Error> {
+        Ok(BaseEncoded::new(self.base_encoding, cid.clone()))
+    }
+
+    fn get_subfolder(&self, ecid: &EncodedCid) -> Result<PathBuf, Error> {
+        // get the middle char of the encoded CID
+        let s = ecid.to_string();
+        let l = s.len();
+        let c = s.chars().nth_back(l >> 1).ok_or(FsBlocksError::InvalidCid(ecid.clone()))?;
+
+        // create a pathbuf to the subfolder
+        let mut pb = self.root.clone();
+        pb.push(c.to_string());
+
+        Ok(pb)
+    }
+
+    fn get_file(&self, subfolder: &Path, ecid: &EncodedCid) -> Result<PathBuf, Error> {
+        let mut pb = subfolder.to_path_buf();
+        pb.push(&ecid.to_string());
+        Ok(pb)
+    }
+
+    fn get_lazy_deleted_file(&self, subfolder: &Path, ecid: &EncodedCid) -> Result<PathBuf, Error> {
+        let mut pb = subfolder.to_path_buf();
+        pb.push(&format!(".{}", ecid.to_string()));
+        Ok(pb)
+    }
 }
 
 pub(crate) mod serde_base {
@@ -44,32 +83,21 @@ impl Blocks for FsBlocks {
     type Error = Error;
 
     fn get(&self, cid: &Cid) -> Result<Vec<u8>, Self::Error> {
-        // get the base encoded CID
-        let ecid = BaseEncoded::new(self.base_encoding, cid.clone());
-
-        // get the middle char of the encoded CID
-        let s = ecid.to_string();
-        let l = s.len();
-        let c = s.chars().nth_back(l >> 1).ok_or(FsBlocksError::InvalidCid(ecid.clone()))?;
-
-        // create a pathbuf to the subfolder
-        let mut pb = self.root.clone();
-        pb.push(c.to_string());
+        // get the paths
+        let (ecid, subfolder, file, _) = self.get_paths(cid)?;
 
         // check if it exists and is a dir...otherwise create the dir
-        let exists = pb.try_exists()?;
-        if exists {
-            if !pb.is_dir() {
-                return Err(FsBlocksError::NotDir(pb).into());
+        if subfolder.try_exists()? {
+            if !subfolder.is_dir() {
+                return Err(FsBlocksError::NotDir(subfolder).into());
             }
         } else {
             return Err(FsBlocksError::NoSuchBlock(ecid).into());
         }
 
         // store the block in the filesystem
-        pb.push(&ecid.to_string());
-        debug!("Getting block from: {}", pb.display());
-        let mut f = File::open(&pb)?;
+        debug!("Getting block from: {}", file.display());
+        let mut f = File::open(&file)?;
         let mut data = Vec::default();
         f.read_to_end(&mut data)?;
         Ok(data)
@@ -83,34 +111,55 @@ impl Blocks for FsBlocks {
         // call the callback for calculating the CID
         let cid = get_cid(data)?;
 
-        // get the base encoded CID
-        let ecid = BaseEncoded::new(self.base_encoding, cid.clone());
-
-        // get the middle char of the encoded CID
-        let s = ecid.to_string();
-        let l = s.len();
-        let c = s.chars().nth_back(l >> 1).ok_or(FsBlocksError::InvalidCid(ecid.clone()))?;
-
-        // create a pathbuf to the subfolder
-        let mut pb = self.root.clone();
-        pb.push(c.to_string());
+        // get the paths
+        let (_, subfolder, file, _) = self.get_paths(&cid)?;
 
         // check if it exists and is a dir...otherwise create the dir
-        let exists = pb.try_exists()?;
-        if exists {
-            if !pb.is_dir() {
-                return Err(FsBlocksError::NotDir(pb).into());
+        if subfolder.try_exists()? {
+            if !subfolder.is_dir() {
+                return Err(FsBlocksError::NotDir(subfolder).into());
             }
         } else {
-            fs::create_dir_all(pb.clone())?;
+            fs::create_dir_all(&subfolder)?;
+            debug!("Created subfolder at: {}", subfolder.display());
         }
 
         // store the block in the filesystem
-        pb.push(&ecid.to_string());
-        debug!("Storing block at: {}", pb.display());
-        let mut f = File::create(&pb)?;
+        debug!("Storing block at: {}", file.display());
+        let mut f = File::create(&file)?;
         f.write_all(data.as_ref())?;
         Ok(cid)
+    }
+
+    fn rm(&self, cid: &Cid) -> Result<Vec<u8>, Self::Error> {
+        // first try to get the value
+        let v = self.get(cid)?;
+
+        // get the paths
+        let (_, subfolder, file, lazy_deleted_file) = self.get_paths(&cid)?;
+
+        // remove the file if it exists
+        if file.try_exists()? && file.is_file() {
+            if self.lazy {
+                // rename the file instead of remove it
+                fs::rename(&file, &lazy_deleted_file)?;
+                debug!("Lazy deleted block at: {} to {}", file.display(), lazy_deleted_file.display());
+            } else {
+                // not lazy so delete it
+                fs::remove_file(&file)?;
+                debug!("Removed block at: {}", file.display());
+            }
+        }
+
+        // remove the subfolder if it is emtpy and we're not lazy
+        if subfolder.try_exists()? && subfolder.is_dir() {
+            if fs::read_dir(&subfolder)?.count() == 0 && !self.lazy {
+                fs::remove_dir(&subfolder)?;
+                debug!("Removed subdir at: {}", subfolder.display());
+            }
+        }
+
+        Ok(v)
     }
 
     fn encoding(&self) -> Result<Base, Self::Error> {
@@ -250,6 +299,19 @@ mod tests {
         assert!(fs::remove_dir_all(&pb).is_ok());
     }
 
+    fn put(blocks: &mut FsBlocks, v: impl AsRef<[u8]>) -> Cid {
+        let cid = blocks.put(&v, |data| -> Result<Cid, Error> {
+            let mh = mh::Builder::new_from_bytes(Codec::Blake3, data)?
+                .try_build()?;
+            let cid = cid::Builder::new(Codec::Cidv1)
+                .with_target_codec(Codec::Identity)
+                .with_hash(&mh)
+                .try_build()?;
+            Ok(cid)
+        }).unwrap();
+        cid
+    }
+
     #[test]
     fn test_put_lazy() {
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -258,15 +320,23 @@ mod tests {
         let mut blocks = Builder::new(&pb).try_build().unwrap();
         
         let v1 = b"for great justice!".to_vec();
-        let cid = blocks.put(&v1, |data| -> Result<Cid, Error> {
-            let mh = mh::Builder::new_from_bytes(Codec::Blake3, data.clone())?
-                .try_build()?;
-            let cid = cid::Builder::new(Codec::Cidv1)
-                .with_target_codec(Codec::Identity)
-                .with_hash(&mh)
-                .try_build()?;
-            Ok(cid)
-        }).unwrap();
+        let cid = put(&mut blocks, &v1);
+       
+        let v2 = blocks.get(&cid).unwrap();
+        assert_eq!(v1, v2);
+
+        assert!(fs::remove_dir_all(&pb).is_ok());
+    }
+
+    #[test]
+    fn test_put_not_lazy() {
+        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        pb.push(".tmp4");
+
+        let mut blocks = Builder::new(&pb).not_lazy().try_build().unwrap();
+        
+        let v1 = b"move every zig!".to_vec();
+        let cid = put(&mut blocks, &v1);
         
         let v2 = blocks.get(&cid).unwrap();
         assert_eq!(v1, v2);
@@ -275,25 +345,53 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_not_lazy() {
+    fn test_rm_lazy() {
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push(".tmp4");
+        pb.push(".tmp5");
+
+        let mut blocks = Builder::new(&pb).try_build().unwrap();
+        
+        let v1 = b"for great justice!".to_vec();
+        let cid = put(&mut blocks, &v1);
+
+        // get the paths to the subfolder and file created from the put
+        let (_, _, file, lazy_deleted_file) = blocks.get_paths(&cid).unwrap();
+
+        // lazy delete the block
+        let v2 = blocks.rm(&cid).unwrap();
+        assert_eq!(v1, v2);
+
+        // this is lazy so the lazy deleted file should sill be there
+        assert!(lazy_deleted_file.try_exists().unwrap());
+        // and the file should not be there
+        assert!(!file.try_exists().unwrap());
+
+        assert!(fs::remove_dir_all(&pb).is_ok());
+    }
+
+    #[test]
+    fn test_rm_not_lazy() {
+        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        pb.push(".tmp6");
 
         let mut blocks = Builder::new(&pb).not_lazy().try_build().unwrap();
         
         let v1 = b"move every zig!".to_vec();
-        let cid = blocks.put(&v1, |data| -> Result<Cid, Error> {
-            let mh = mh::Builder::new_from_bytes(Codec::Blake3, data.clone())?
-                .try_build()?;
-            let cid = cid::Builder::new(Codec::Cidv1)
-                .with_target_codec(Codec::Identity)
-                .with_hash(&mh)
-                .try_build()?;
-            Ok(cid)
-        }).unwrap();
-        
-        let v2 = blocks.get(&cid).unwrap();
+        let cid = put(&mut blocks, &v1);
+
+        // get the paths to the subfolder and file created from the put
+        let (_, subfolder, file, lazy_deleted_file) = blocks.get_paths(&cid).unwrap();
+
+        // delete the block
+        let v2 = blocks.rm(&cid).unwrap();
         assert_eq!(v1, v2);
+
+        // this is not lazy so the lazy deleted file should not be there
+        assert!(!lazy_deleted_file.try_exists().unwrap());
+        // and the file should not be there either
+        assert!(!file.try_exists().unwrap());
+        // and since the subfolder is empty it should not be there either
+        assert!(!subfolder.try_exists().unwrap());
 
         assert!(fs::remove_dir_all(&pb).is_ok());
     }
