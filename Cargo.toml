@@ -1,6 +1,6 @@
 [package]
 name = "content-addressable"
-version = "0.0.11"
+version = "0.0.12"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Content addressable storage traits and implementations"
@@ -22,6 +22,7 @@ multitrait = { version = "1.0", git = "https://github.com/cryptidtech/multitrait
 multiutil = { version = "1.0", git = "https://github.com/cryptidtech/multiutil.git" }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
 serde_cbor = { version = "0.11", optional = true }
+tempfile = "3.10.1"
 thiserror = "1.0.60"
 
 [dev-dependencies]

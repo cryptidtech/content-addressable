@@ -10,6 +10,9 @@ pub enum Error {
     /// I/O error
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// Persist error
+    #[error(transparent)]
+    Persist(#[from] tempfile::PersistError),
 
     /// A multicid error
     #[error(transparent)]

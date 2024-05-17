@@ -187,7 +187,7 @@ impl Blocks for FsBlocks {
         let cid = get_cid(data)?;
 
         // get the paths
-        let (_, subfolder, file, _) = self.get_paths(&cid)?;
+        let (ecid, subfolder, file, _) = self.get_paths(&cid)?;
 
         // check if it exists and is a dir...otherwise create the dir
         if subfolder.try_exists()? {
@@ -201,8 +201,19 @@ impl Blocks for FsBlocks {
 
         // store the block in the filesystem
         debug!("fsblocks: Storing block at: {}", file.display());
-        let mut f = File::create(&file)?;
-        f.write_all(data.as_ref())?;
+
+        // securely create a temporary file. it is named .<ecid> in the correct subfolder so if
+        // something goes wrong, a future GC pass will clean it up
+        let mut temp = tempfile::Builder::new()
+            .suffix(&format!(".{}", ecid))
+            .tempfile_in(&subfolder)?;
+
+        // write the contents to the file
+        temp.write_all(data.as_ref())?;
+
+        // atomically rename/move it to the correct location
+        temp.persist(&file)?;
+
         Ok(cid)
     }
 
