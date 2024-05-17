@@ -157,6 +157,12 @@ pub(crate) mod serde_base {
 impl Blocks for FsBlocks {
     type Error = Error;
 
+    fn exists(&self, cid: &Cid) -> Result<bool, Self::Error> {
+        // get the paths
+        let (_, _, file, _) = self.get_paths(cid)?;
+        Ok(file.try_exists()?)
+    }
+
     fn get(&self, cid: &Cid) -> Result<Vec<u8>, Self::Error> {
         // get the paths
         let (ecid, subfolder, file, _) = self.get_paths(cid)?;

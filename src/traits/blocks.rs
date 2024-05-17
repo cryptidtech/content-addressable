@@ -6,6 +6,9 @@ pub trait Blocks {
     /// The error type returned
     type Error;
 
+    /// Try to confirm a block exists
+    fn exists(&self, cid: &Cid) -> Result<bool, Self::Error>;
+
     /// Try to get a block from its content address 
     fn get(&self, cid: &Cid) -> Result<Vec<u8>, Self::Error>;
 
