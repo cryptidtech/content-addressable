@@ -36,6 +36,9 @@ pub enum Error {
     /// A custom error for callback functions
     #[error("Custom error: {0}")]
     Custom(String),
+    /// A wraps any error
+    #[error(transparent)]
+    Wrapped(#[from] Box<dyn std::error::Error>)
 }
 
 /// Error from FsBlocks

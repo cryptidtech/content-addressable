@@ -1,6 +1,6 @@
 [package]
 name = "content-addressable"
-version = "0.0.14"
+version = "0.0.15"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Content addressable storage traits and implementations"
