@@ -184,10 +184,11 @@ impl Blocks for FsBlocks {
         Ok(data)
     }
 
-    fn put<D, F>(&mut self, data: &D, get_cid: F) -> Result<Cid, Self::Error>
+    fn put<D, F1, F2>(&mut self, data: &D, get_cid: F1, pre_commit: F2) -> Result<Cid, Self::Error>
     where
         D: AsRef<[u8]>,
-        F: Fn(&D) -> Result<Cid, Self::Error>
+        F1: Fn(&D) -> Result<Cid, Self::Error>,
+        F2: Fn(&Cid) -> Result<(), Self::Error>,
     {
         // call the callback for calculating the CID
         let cid = get_cid(data)?;
@@ -208,14 +209,17 @@ impl Blocks for FsBlocks {
         // store the block in the filesystem
         debug!("fsblocks: Storing block at: {}", file.display());
 
-        // securely create a temporary file. it is named .<ecid> in the correct subfolder so if
-        // something goes wrong, a future GC pass will clean it up
+        // securely create a temporary file. its name begins with "." so that if something goes
+        // wrong, the temporary file will be cleaned up by a future GC pass
         let mut temp = tempfile::Builder::new()
             .suffix(&format!(".{}", ecid))
             .tempfile_in(&subfolder)?;
 
         // write the contents to the file
         temp.write_all(data.as_ref())?;
+
+        // call the pre_commit closure to give the caller a chance to do other side effects
+        pre_commit(&cid)?;
 
         // atomically rename/move it to the correct location
         temp.persist(&file)?;
@@ -369,7 +373,7 @@ mod tests {
                 .with_hash(&mh)
                 .try_build()?;
             Ok(cid)
-        }).unwrap();
+        }, |_| Ok(())).unwrap();
         cid
     }
 
