@@ -1,6 +1,6 @@
 [package]
 name = "content-addressable"
-version = "0.0.15"
+version = "0.0.16"
 edition = "2021"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 description = "Content addressable storage traits and implementations"
@@ -18,6 +18,7 @@ multibase = { version = "1.0", git = "https://github.com/cryptidtech/rust-multib
 multicid = { version = "1.0", git = "https://github.com/cryptidtech/multicid.git" }
 multicodec = { version = "1.0", git = "https://github.com/cryptidtech/rust-multicodec.git" }
 multihash = { version = "1.0", git = "https://github.com/cryptidtech/multihash.git" }
+multikey = { version = "1.0", git = "https://github.com/cryptidtech/multikey.git" }
 multitrait = { version = "1.0", git = "https://github.com/cryptidtech/multitrait.git" }
 multiutil = { version = "1.0", git = "https://github.com/cryptidtech/multiutil.git" }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
@@ -27,6 +28,7 @@ thiserror = "1.0.60"
 
 [dev-dependencies]
 hex = "0.4"
+rand = "0.8"
 serde_cbor = "0.11"
 serde_json = "1.0"
 serde_test = "1.0"

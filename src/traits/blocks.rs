@@ -24,5 +24,5 @@ pub trait Blocks {
         F2: Fn(&Cid) -> Result<(), Self::Error>;
 
     /// Try to remove a block from storage
-    fn rm(&self, cit: &Cid) -> Result<Vec<u8>, Self::Error>;
+    fn rm(&self, cid: &Cid) -> Result<Vec<u8>, Self::Error>;
 }

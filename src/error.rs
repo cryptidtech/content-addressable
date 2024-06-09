@@ -23,15 +23,18 @@ pub enum Error {
     /// A multihash error
     #[error(transparent)]
     Multihash(#[from] multihash::Error),
+    /// A multikey error
+    #[error(transparent)]
+    Multikey(#[from] multikey::Error),
     /// A multitrait error
     #[error(transparent)]
     Multitrait(#[from] multitrait::Error),
     /// A multiutil error
     #[error(transparent)]
     Multiutil(#[from] multiutil::Error),
-    /// An FsBlocks error
+    /// An FsStorage
     #[error(transparent)]
-    FsBlocks(#[from] FsBlocksError),
+    FsStorage(#[from] FsStorageError),
 
     /// A custom error for callback functions
     #[error("Custom error: {0}")]
@@ -41,20 +44,20 @@ pub enum Error {
     Wrapped(#[from] Box<dyn std::error::Error>)
 }
 
-/// Error from FsBlocks
+/// Error from FsStorage
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum FsBlocksError {
+pub enum FsStorageError {
     /// unsupported base encoding for Cids
     #[error("Unsupported base encoding {0:?}")]
     UnsupportedBaseEncoding(multibase::Base),
     /// the path exists but it isn't a dir
     #[error("Path is not a directory {0}")]
     NotDir(std::path::PathBuf),
-    /// the cid for a block is invalid
-    #[error("Invalid cid for block {0}")]
-    InvalidCid(multicid::EncodedCid),
-    /// the cid doesn't refer to a block
-    #[error("No such block {0}")]
-    NoSuchBlock(multicid::EncodedCid),
+    /// the id for the data is invalid
+    #[error("Invalid id {0}")]
+    InvalidId(String),
+    /// the id doesn't refer to data
+    #[error("No such data {0}")]
+    NoSuchData(String),
 }
