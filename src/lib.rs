@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//!
+//! content-addressable
 #![warn(missing_docs)]
 #![deny(
     trivial_casts,

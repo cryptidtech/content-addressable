@@ -49,7 +49,7 @@ where
             }
             for file in fs::read_dir(subfolder)? {
                 let file = file?;
-                if file.file_name().to_string_lossy().starts_with(".") {
+                if file.file_name().to_string_lossy().starts_with('.') {
                     fs::remove_file(&file.path())?;
                     debug!("fsstorage: GC'd file {}", file.path().display());
                 }
@@ -102,7 +102,7 @@ where
             Base::Base64Pad |
             Base::Base64Url |
             Base::Base64UrlPad => Ok("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".into()),
-            _ => Err(FsStorageError::UnsupportedBaseEncoding(base.clone()).into())
+            _ => Err(FsStorageError::UnsupportedBaseEncoding(*base).into())
         }
     }
 
@@ -139,7 +139,7 @@ where
 
     fn get_lazy_deleted_file<P: AsRef<Path>>(&self, subfolder: P, eid: &BaseEncoded<T, DetectedEncoder>) -> Result<PathBuf, Error> {
         let mut pb = subfolder.as_ref().to_path_buf();
-        pb.push(&format!(".{}", eid.to_string()));
+        pb.push(&format!(".{}", eid));
         Ok(pb)
     }
 }

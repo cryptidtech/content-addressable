@@ -48,7 +48,7 @@ impl Builder {
             builder = builder.not_lazy();
         }
 
-        Ok(builder.try_build()?)
+        builder.try_build()
     }
 }
 
@@ -130,7 +130,7 @@ impl Blocks for FsBlocks {
         let v = self.get(cid)?;
 
         // get the paths
-        let (_, subfolder, file, lazy_deleted_file) = self.get_paths(&cid)?;
+        let (_, subfolder, file, lazy_deleted_file) = self.get_paths(cid)?;
 
         // remove the file if it exists
         if file.try_exists()? && file.is_file() {
@@ -146,11 +146,9 @@ impl Blocks for FsBlocks {
         }
 
         // remove the subfolder if it is emtpy and we're not lazy
-        if subfolder.try_exists()? && subfolder.is_dir() {
-            if fs::read_dir(&subfolder)?.count() == 0 && !self.lazy {
-                fs::remove_dir(&subfolder)?;
-                debug!("fsblocks: Removed subdir at: {}", subfolder.display());
-            }
+        if subfolder.try_exists()? && subfolder.is_dir() && fs::read_dir(&subfolder)?.count() == 0 && !self.lazy {
+            fs::remove_dir(&subfolder)?;
+            debug!("fsblocks: Removed subdir at: {}", subfolder.display());
         }
 
         Ok(v)

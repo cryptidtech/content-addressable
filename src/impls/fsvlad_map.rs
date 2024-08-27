@@ -48,7 +48,7 @@ impl Builder {
             builder = builder.not_lazy();
         }
 
-        Ok(builder.try_build()?)
+        builder.try_build()
     }
 }
 
@@ -142,11 +142,9 @@ impl CidMap<Vlad> for FsVladMap {
         }
 
         // remove the subfolder if it is emtpy and we're not lazy
-        if subfolder.try_exists()? && subfolder.is_dir() {
-            if fs::read_dir(&subfolder)?.count() == 0 && !self.lazy {
-                fs::remove_dir(&subfolder)?;
-                debug!("fsmultikey_map: Removed subdir at: {}", subfolder.display());
-            }
+        if subfolder.try_exists()? && subfolder.is_dir() && fs::read_dir(&subfolder)?.count() == 0 && !self.lazy {
+            fs::remove_dir(&subfolder)?;
+            debug!("fsmultikey_map: Removed subdir at: {}", subfolder.display());
         }
 
         Ok(v)
